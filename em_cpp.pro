@@ -15,5 +15,4 @@ HEADERS += \
     Chapter6.hpp \
     Facilities.hpp \
     Chapter3.hpp \
-    Chapter1.hpp \
-    Chapter3_temp.hpp
+    Chapter1.hpp
