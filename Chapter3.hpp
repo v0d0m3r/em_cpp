@@ -925,7 +925,6 @@ private:
     std::map<int, std::string> values;
 };
 // Добавим логгирование
-void make_log_entry(const std::string&);
 class String_table {
 public:
     String_table()

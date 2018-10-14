@@ -20,6 +20,9 @@
 
 class Widget;
 
+template<class T>
+void make_log_entry(T&);
+
 //------------------------------------------------------------------------------
 
 #endif // FACILITIES_HPP
