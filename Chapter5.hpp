@@ -269,6 +269,42 @@ operator+(Matrix&& lhs, const Matrix& rhs)
     return std::move(lhs);  // Перемещение lhs в
                             // возвращаемое значение
 }
+// Без std::move() (Нежелательно)
+Matrix                      // Возврат по значению
+operator+(Matrix&& lhs, const Matrix& rhs)
+{
+    lhs += rhs;
+    return lhs;  // Копирование lhs в
+                 // возвращаемое значение
+}
+
+
+class Fraction;
+// ...
+template<class T>
+Fraction                            // Возврат по значению
+reduce_and_copy(T&& frac)           // Универсальная ссылка
+{
+    frac.reduce();
+    return std::forward<T>(frac);   // Перемещение rvalue и
+}                                   // копирование lvalue в
+                                    // возвращаемое значение
+
+
+Widget make_widget()    // "Копирующая" версия make_widget
+{
+    Widget w;           // Локальная переменная
+    // ...              // Настройка w
+    return w;           // "Копирование" w в возвращаемое значение
+}
+// ...
+Widget make_widget()        // "Перемещающая" версия make_widget
+{
+    Widget w;               // Локальная переменная
+    // ...                  // Настройка w
+    return std::move(w);    // "Перемещение" w в возвращаемое
+}                           // значение (не делайте этого!)
+
 
 }
 
@@ -291,12 +327,417 @@ std::string pet_name("Darla");
 log_and_add(pet_name);                  // lvalue типа std::string
 log_and_add(std::string("Persephone")); // rvalue типа std::string
 log_and_add("Patty Dog");               // Строковый литерал
+// ...
+template<class T>
+void log_and_add(T&& name)
+{
+    auto now = std::chrono::system_clock::now();
+    log(now, "log_and_add");
+    names.emplace(std::forward<T>(name));
+}
+std::string pet_name("Darla");          // Как и ранее
+log_and_add(pet_name);                  // Как и ранее, копирование
+                                        // lvalue в multiset
+
+log_and_add(std::string("Persephone")); // Перемещение rvalue
+                                        // вместо копирования
+
+log_and_add("Patty Dog");               // Создание std::string
+                                        // в multiset вместо копирования
+                                        // временного std::string
+// ...
+std::string name_from_idx(int idx);     // Возвращает имя,
+                                        // соответсвующее idx
+void log_and_add(int idx)               // Новая перегрузка
+{
+    auto now = std::chrono::system_clock::now();
+    log(now, "log_and_add");
+    names.emplace(name_from_idx(idx));
+}
+// Разрешение перегрузки работает, как и следовало ожидать
+std::string pet_name("Darla");          // Как и ранее
+log_and_add(pet_name);                  // Как и ранее, эти вызовы
+log_and_add(std::string("Persephone")); // приводят к использованию
+log_and_add("Patty Dog");               // перегрузки для T&&
+
+log_and_add(22);                        // Вызов int-перегрузки
+// ...
+short name_idx;
+// ...                                  // Задается значение переменной name_idx
+log_and_add(name_idx);                  // Ошибка!!!!!!
+                                        // Вызов перегрузки для T&&
+class Person {
+    std::string name;
+public:
+    template<class T>
+    explicit Person(T&& n)              // Конструктор с прямой передачей
+        : name(std::forward<T>(n)){}    // инициализирует члены-данные
+
+    explicit Person(int idx)            // Конструктор с параметром int
+        : name(name_from_idx(idx)) {}
+
+    Person(const Person& rhs);          // Копирующий конструктор
+                                        // (сгенерирован компилятором)
+    Person(Person&& rhs);               // Перемешающий конструктор
+                                        // (сгенерирован компилятором)
+};
+Person p("Nancy");
+auto clone_of_p(p); // Создание нового объекта Person из p;
+                    // этот код не компилируется!
+// В результате инстанцирования auto clone_of_p(p):
+class Person {
+public:
+    explicit Person(Person& n)              // Инстанцирован из
+        : name(std::forward<Person&>(n)){}  // шаблона с прямой
+                                            // передачей
+
+    explicit Person(int idx);               // Как и ранее
+    Person(const Person& rhs);              // Копирующий конструктор
+                                            // (сгенерирован компилятором)
+    // ...
+};
+const Person p("Nancy");    // Теперь объект константный
+auto clone_of_p(p);         // Вызов копирующего конструктора!
+// В результате инстанцирования auto clone_of_p(p):
+class Person {
+public:
+    explicit Person(const Person& n); // Инстанцирован из шаблона
+    Person(const Person& rhs);        // Копирующий конструктор
+                                      // (сгенерирован компилятором)
+    // ...
+};
+// Наследование с подвохом!!
+class Special_person {
+public:
+    Special_person(const Special_person& rhs)   // Копирующий конструктор;
+        : Person(rhs)                           // вызывает конструктор
+    { /* ... */ }                               // базового класса с прямой передачей
+
+    Special_person(Special_person&& rhs)        // Перемещающий конструктор;
+        : Person(std::move(rhs))                // вызывает конструктор
+    { /* ... */ }                               // базового класса с прямой передачей
+};
+
+
+}
+
+//------------------------------------------------------------------------------
+// 5.5 Знакомство с альтернативами перегрузки
+// для универсальных ссылок
+{
+
+
+// 1) Отказ от перегрузки
+
+
+// 2) Передача const T&
+
+
+// 3) Передача по значению
+{
+
+
+class Person {
+    std::string name;
+public:
+    explicit Person(std::string n)      // Замена конструктора с T&&
+        : name(std::move(n)){}
+
+    explicit Person(int idx)            // Как и ранее
+        : name(name_from_idx(idx)) {}
+    // ...
+};
+
+
+}
+
+
+// 4) Диспетчеризация дескрипторов (tag dispatch)
+{
+
+
+std::multiset<std::string> names;   // Глобальная структура данных
+// ...
+template<class T>
+void log_and_add(T&& name)
+{
+    auto now = std::chrono::system_clock::now();
+    log(now, "log_and_add");
+    names.emplace(std::forward<T>(name));
+}
+
+
+// Нецелочисленный аргумент добавляется
+// в глобальную структуру данных
+template<class T>
+void log_and_add_impl(T&& name, std::false_type)
+{
+    auto now = std::chrono::system_clock::now();
+    log(now, "log_and_add");
+    names.emplace(std::forward<T>(name));
+}
+
+std::string name_from_idx(int idx);             // Как в 5.4
+
+// Целочисленный аргумент: поиск имени и
+// вызов с этим именем функции log_and_add
+void log_and_add_impl(int idx, std::true_type)
+{
+    log_and_add(name_from_idx(int idx));
+}
+
+template<class T>
+void log_and_add(T&& t)
+{
+    log_and_add_impl(std::forward<T>(t),
+                     std::is_integral<
+                        std::remove_reference_t<T>
+                     >()
+    );
+}
+
+
+}
+
+
+// 5) Ограничения шаблонов, получающих универсальные ссылки
+{
+
+
+class Person {
+public:
+    template<class T,
+            typename = typename std::enable_if<условие>::type>
+    explicit Person(T&& n);
+};
+
+
+class Person {
+public:
+    template<class T,
+            typename = typename std::enable_if<
+            !std::is_same<Person,
+                          typename std::decay<T>::type
+                         >::value
+            >::type
+    >
+    explicit Person(T&& n);
+};
+
+
+// Наследование с подвохом!!
+class Special_person {
+public:
+    Special_person(const Special_person& rhs)   // Копирующий конструктор;
+        : Person(rhs)                           // вызывает конструктор
+    { /* ... */ }                               // базового класса с прямой передачей
+
+    Special_person(Special_person&& rhs)        // Перемещающий конструктор;
+        : Person(std::move(rhs))                // вызывает конструктор
+    { /* ... */ }                               // базового класса с прямой передачей
+};
+
+
+// C++11
+class Person {
+public:
+    template<class T,
+            typename = typename std::enable_if<
+                !std::is_base_of<Person,
+                             typename std::decay<T>::type
+                 >::value
+            >::type
+    >
+    explicit Person(T&& n);
+};
+// C++14
+class Person {
+public:
+    template<class T,
+             typename = std::enable_if_t<
+                !std::is_base_of_v<Person,
+                                   std::decay_t<T>
+                 >
+            >
+    >
+    explicit Person(T&& n);
+};
+
+
+class Person {
+    std::string name;
+public:
+    template<class T,
+             typename = std::enable_if_t<
+                !std::is_base_of_v<Person,
+                                   std::decay_t<T>
+                 >
+                &&
+                !std::is_integral_v<std::remove_reference_t<T>>
+            >
+    >
+    explicit Person(T&& n)          // Конструктор для std::string и
+        : name(std::forward<T>(n))  // аргументов, приводимых к
+    { /* ... */ }                   // std::string
+
+    explicit Person(int idx)        // Конструктор для
+        : name(name_from_idx(idx))  // целочисленных аргументов
+    { /* ... */ }
+
+    // ...   // Копирующий и перемещающий конструкторы и т.д.
+};
+
+
+// Обратить внимание на std::static_assert
+class Person {
+    std::string name;
+public:
+    template<                       // Как и ранее
+        class T,
+        typename = std::enable_if_t<
+            !std::is_base_of_v<Person,
+                std::decay_t<T>
+            >
+            &&
+            !std::is_integral_v<std::remove_reference_t<T>>
+        >
+    >
+    explicit Person(T&& n)
+        : name(std::forward<T>(n))
+    {
+        static_assert(
+            std::is_constructible_v<std::string, T>,
+            "Параметр n не может использоваться для "
+            "конструирования std::string"
+        );
+            // Здесь код обычного конструктора
+    }
+            // Остальная часть класса Person (как и ранее)
+};
+
+
+}
+
+
+}
+
+//------------------------------------------------------------------------------
+// 5.6 Свертывание ссылок
+{
+
+
+template<class T>
+void func(T&& param);
+// ...
+Widget widget_factory();    // Функция возвращающая rvalue
+Widget w;                   // Переменная (lvalue)
+func(w);                    // Вызов функции с lvalue; тип T
+                            // представляет собой Widget&
+func(widget_factory());     // Вызов функции с rvalue; тип T
+                            // представляет собой Widget
+
+
+int x;
+// ...
+auto & & rx = x;    // Ошибка! Объявлять ссылки на сылки нельзя
+// ...
+func(w);            // Вызов функции с lvalue; тип T
+                    // представляет собой Widget&
+// Если возьмем тип Widget& (выведенный для T)
+// и используем дл инстанцирования шаблона, то получим следующее:
+void func (Widget& && param);
+// Но на самом деле компилятор выведет:
+void func (Widget& param);  // Компилятор использует
+                            // свертывание ссылок (reference collapsing)
+
+
+template<class T>
+void f(T&& fparam)
+{
+    // ...                              // Некоторая работа
+    some_func(std::forward<T>(fparam)); // Передача fparam в some_func
+}
+template<class T>      // В простанстве имен std
+T&& forward(typename
+            std::remove_reference<T>::type& param)
+{
+    return static_cast<T&&>(param);
+}
+Widget w;
+f(w);       // Передача lvalue
+// В результате std::forward:
+Widget& && forward(typename
+                   remove_reference<Widget&>::type& param)
+{
+    return static_cast<Widget& &&>(param);
+}
+// В результате подстановки typename
+// remove_reference<Widget&>::type дает Widget
+Widget& && forward(Widget& param)
+{
+    return static_cast<Widget& &&>(param);
+}
+// Применяем сворачивание ссылок
+Widget& forward(Widget& param)
+{ return static_cast<Widget&>(param); }
+// Для rvalue
+f(widget_factory());        // Вызов функции с rvalue; тип T
+                            // представляет собой Widget
+Widget&& forward(typename
+                 remove_reference<Widget>::type& param)
+{ return static_cast<Widget&&>(param); }
+// В результате подстановки typename
+// remove_reference<Widget>::type дает Widget
+Widget&& forward(Widget& param)
+{ return static_cast<Widget&&>(param); }
+
+// C++14
+template<class T>      // В простанстве имен std
+T&& forward(remove_reference_t<T>& param)
+{
+    return static_cast<T&&>(param);
+}
+
+
+template<class T>
+void func(T&& param);
+// ...
+Widget widget_factory();    // Функция возвращающая rvalue
+Widget w;                   // Переменная (lvalue)
+func(w);                    // Вызов функции с lvalue; тип T
+                            // представляет собой Widget&
+func(widget_factory());     // Вызов функции с rvalue; тип T
+                            // представляет собой Widget
+// Тоже самое с помощью auto
+auto&& w1 = w;
+// w - lvalue, auto => Widget&
+Widget& && w1 = w;
+// После сворачивания ссылок:
+Widget& w1 = w; // w1 - lvalue-ссылка
+// ...
+auto&& w2 = widget_factory();
+// w - rvalue, auto => Widget
+Widget&& w2 = w;
+
+
+template <class T>
+class Widget {
+public:
+    typedef T&& rvalue_ref_to_t;
+};
+
+Widget<int&> w;
+// Подстановка int& вместо T в шаблоне Widget:
+typedef int& && rvalue_ref_to_t;
+// В результате сворачивания ссылок:
+typedef int& rvalue_ref_to_t;
+
 
 }
 
 //------------------------------------------------------------------------------
 
-//------------------------------------------------------------------------------
+
 
 #endif // CHAPTER5_HPP
 
