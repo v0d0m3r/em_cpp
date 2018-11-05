@@ -693,7 +693,7 @@ Widget&& forward(Widget& param)
 
 // C++14
 template<class T>      // В простанстве имен std
-T&& forward(remove_reference_t<T>& param)
+decltype(auto) forward(remove_reference_t<T>& param)
 {
     return static_cast<T&&>(param);
 }
@@ -736,8 +736,168 @@ typedef int& rvalue_ref_to_t;
 }
 
 //------------------------------------------------------------------------------
+// 5.7 Считайте, что перемещающие операции
+// отсутствуют, дороги или не используются
+{
 
 
+std::vector<Widget> vw1;
+// Размещение данных в vw1
+// ...
+// Перемещение vw1 в vw2. Выполняется
+// за константное время, изменяя
+// только указатели в vw1 и vw2
+auto vw2(std::move(vw1));
+
+
+std::array<Widget, 10000> aw1;
+// Размещение данных в aw1
+// ...
+// Перемещение aw1 в aw2. Выполняется
+// за линейное время. Все элементы
+// aw1 перемещаются в aw2
+auto aw2(std::move(aw1));
+
+
+}
+
+//------------------------------------------------------------------------------
+// 5.8 Познакомьтесь с случаями некорректной
+// работы прямой передачи
+{
+
+
+// Общее
+{
+
+
+template<class T>
+void fwd(T&& param)             // Принимает любой аргумент
+{
+    f(std::forward<T>(param));  // Передача аргумента в f
+}
+
+// Вариативный шаблон (variadic template)
+template<class... Ts>
+void fwd(Ts&&... params)            // Принимает любые аргументы
+{
+    f(std::forward<Ts>(params)...); // Передача аргументов в f
+}
+
+f ( expression );   // Если этот вызов выполняет что-то одно,
+fwd ( expression ); // а этот - нечто иное, прямая передача
+                    // функцией fwd функции f неудачна
+
+
+}
+
+
+// Инициализаторы в фигурный скобках
+{
+
+
+void f(const std::vector<int>& v);
+f({0, 1, 2, 3});    // Ок "{0, 1, 2, 3}" неявно преобразуется
+                    // в std::vector<int>
+// ...
+fwd({0, 1, 2, 3});  // Ошибка! Код не компилируется!
+// ...
+auto il = {0, 1, 2, 3}; // Тип il выводится как
+                        // std::initializer_list<int>
+f(il);                  // Ок, прямая передача il в f
+
+
+}
+
+
+// 0 и NULL в качестве нулевых указателей
+
+
+// Целочисленные члены-данные static const
+// и constexpr без определений
+{
+
+
+class Widget {
+public:
+    // Объявление min_vals:
+    static constexpr std::size_t min_vals = 28;
+    // ...
+};
+// ...      // Определения min_vals нет
+std::vector<int> widget_data;
+widget_data.reserve(Widget::min_vals);  // Использование min_vals
+
+void f(std::size_t val);
+f(Widget::min_vals);        // Ок, рассматривается как "f(28)"
+fwd(Widget::min_vals);      // Ошибка! Не должно компоноваться
+// fwd требует определения min_vals, решение:
+constexpr std::size_t Widget::min_vals; // В .cpp-файле Widget
+
+
+}
+
+
+// Имена перегруженных функций и имена шаблонов
+{
+
+
+void f(int (*pf)(int));  // pf - функция обработки
+void f(int pf(int));     // Объявление той же f, что и выше
+// ...
+int process_val(int value);
+int process_val(int value, int priority);
+// ...
+f(process_val);         // Без проблем
+fwd(process_val);       // Ошибка! Какая process_val?
+// ...
+template<class T>
+T work_on_val(T param)  // Шаблон обработки значений
+{ /*...*/ }
+// ...
+frd(work_on_val);       // Ошибка! Какое инстанцировании work_on_val
+// ... Решение этих проблем:
+using Process_func_type =
+        int (*)(int);
+Process_func_type process_val_ptr = // Определяем необходимую
+        process_val;                // сигнатуру process_val
+// ...
+fwd(process_val_ptr);               // Ок
+fwd(static_cast<Process_func_type>(work_on_val));   // Так же ок
+
+
+}
+
+
+// Битовые поля
+{
+
+
+struct Ip_v4_header {
+    std::uint32_t version: 4,
+                  IHL: 4,
+                  DSCP: 6,
+                  ECN: 2,
+                  total_lenght: 16;
+    // ...
+};
+void f(std::size_t sz); // Вызываемая функция
+Ip_v4_header h;
+// ...
+f(h.total_lenght);      // Все в порядке
+fwd(h.total_lenght);    // Ошибка!
+// Решение проблемы:
+// Копирование значения битового поля
+auto lenght = static_cast<std::uint16_t>(h.total_lenght);
+fwd(lenght);            // Передача копии
+
+
+}
+
+
+}
+
+//------------------------------------------------------------------------------
 
 #endif // CHAPTER5_HPP
 
