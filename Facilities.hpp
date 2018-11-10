@@ -16,6 +16,7 @@
 #include <mutex>
 #include <type_traits>
 #include <set>
+#include <map>
 
 //------------------------------------------------------------------------------
 

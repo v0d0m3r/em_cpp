@@ -1,11 +1,212 @@
 //------------------------------------------------------------------------------
 
-#ifndef LAMBDAS_HPP
-#define LAMBDAS_HPP
+// Глава 6: Лямбда выражения
+
+//------------------------------------------------------------------------------
+
+#ifndef CHAPTER6_HPP
+#define CHAPTER6_HPP
 
 //------------------------------------------------------------------------------
 
 #include "Facilities.hpp"
+
+//------------------------------------------------------------------------------
+// 6.0 Общая информация
+{
+
+
+std::find_if(container.begin(), container.end(),
+             [](int val) { return 0 < val && val < 10; }));
+
+
+{
+    int x;                      // x - локальная переменная
+    // ...
+    auto c1 =                   // c1 - копия замыкания,
+        [x] (int y) {           // сгенерированного
+            return x*y > 55; }; // лямбда-выражением
+    auto c2 = c1;               // c2 копия c1
+    auto c3 = c2;               // c3 копия c2
+    // ...
+}
+
+
+}
+
+//------------------------------------------------------------------------------
+// 6.1 Избегайте режимов захвата по умолчанию
+//{
+
+
+using Filter_container = std::vector<std::function<bool(int)>>;
+// ...
+Filter_container filters;   // Функции фильтрации
+filters.emplace_back(
+    [] (int value) { return value % 5 == 0; }
+);
+// ...
+void add_divisor_filter()
+{
+    auto calc1 = compute_some_value1();
+    auto calc2 = compute_some_value2();
+    auto divisor = compute_divisor(calc1, calc2);
+    filters.emplace_back(   // Опасно! Ссылка на divisor повиснет
+        [&] (int value) { return value % divisor == 0; }
+    );
+}
+// Использование явного захвата divisor по ссылке
+filters.emplace_back(                   // Опасно! Ссылка на
+    [&divisor] (int value)              // на divisor все равно
+    { return value % divisor == 0; }    // повисает!
+);
+
+
+// С++11
+template<class C>
+void work_with_container(const C& container)
+{
+    auto calc1 = compute_some_value1();
+    auto calc2 = compute_some_value2();
+    auto divisor = compute_divisor(calc1, calc2);
+
+    using Cont_elem_t = typename C::value_type;
+
+    using std::begin;
+    using std::end;
+
+    if (std::all_of(                    // Все значения
+            begin(container)),          // в контейнере
+            end(container),             // кратны divisor?
+            [&] (const Cont_elem_t& value)
+            { return value % divisor == 0; }
+        ) {
+        // ...                          // Да
+    } else {
+        // ...                          // Как минимум одно - нет
+    }
+}
+// С++14
+template<class C>
+void work_with_container(const C& container)
+{
+    auto calc1 = compute_some_value1();
+    auto calc2 = compute_some_value2();
+    auto divisor = compute_divisor(calc1, calc2);
+
+    using std::begin;
+    using std::end;
+
+    if (std::all_of(                    // Все значения
+            begin(container)),          // в контейнере
+            end(container),             // кратны divisor?
+            [&] (const auto& value)     // C++14
+            { return value % divisor == 0; }
+        ) {
+        // ...                          // Да
+    } else {
+        // ...                          // Как минимум одно - нет
+    }
+}
+
+
+filters.emplace_back(                   // Теперь
+    [=] (int value)                     // divisor
+    { return value % divisor == 0; }    // не может
+);                                      // зависнуть
+
+
+class Widget {
+public:
+    // ...                      // Конструкторы и т.п.
+    void add_filter() const;    // Добавление элемента в filters
+private:
+    int divisor;                // Используется в фильтре
+};
+// ...
+void Widget::add_filter() const
+{
+    filters.emplace_back(
+        [=] (int value)
+        { return value % divisor == 0; }
+    );
+}
+void Widget::add_filter() const     // Генерирует компилятор для функции выше!
+{
+    auto current_object_ptr = this;
+    filters.emplace_back(
+        [current_object_ptr] (int value)
+        { return value % current_object_ptr->divisor == 0; }
+    );
+}
+// ...
+void Widget::add_filter() const
+{
+    filters.emplace_back(       // Ошибка! Нет захватываемой
+        [divisor] (int value)   // локальной переменной divisor!
+        { return value % divisor == 0; }
+    );
+}
+// ...
+void do_some_work()
+{
+    auto pw =
+        std::make_unique<Widget>();
+
+    pw->add_filter();   // Добавление фильтра
+                        // с Widget::divisor
+    // ...
+}   // Уничтожение Widget; filters хранит висячий указатель!
+// Решение проблемы выше создание локальной копии
+void Widget::add_filter() const
+{
+    auto divisor_copy = divisor;                // Копирование
+    filters.emplace_back(                       // члена-данных
+        [divisor_copy] (int value)              // Захват копии
+        { return value % divisor_copy == 0; }   // Ее использование
+    );
+}
+// Захват по умолчанию тоже сработает с локальной копией
+void Widget::add_filter() const
+{
+    auto divisor_copy = divisor;                // Копирование
+    filters.emplace_back(                       // члена-данных
+        [=] (int value)                         // Захват копии
+        { return value % divisor_copy == 0; }   // Ее использование
+    );
+}
+// С++14
+void Widget::add_filter() const
+{
+    filters.emplace_back(
+        [divisor = divisor] (int value)     // Копирование divisor
+                                            // в замыкание
+        { return value % divisor == 0; }    // Использование копии
+    );
+}
+
+
+// Использование статических переменных
+void add_divisor_filter()
+{
+    // Статические
+    static auto calc1
+        = compute_some_value1();
+    static auto calc2
+        = compute_some_value2();
+    static auto divisor
+        = compute_divisor(calc1, calc2);
+
+    filters.emplace_back(
+        [=] (int value)                     // Ничего не захватывает
+        { return value % divisor == 0; }    // Ссылка на статическую
+    );                                      // переменную
+
+    ++divisor;                              // Изменение divisor
+}
+
+
+//}
 
 //------------------------------------------------------------------------------
 // Тип для момента времени
@@ -128,6 +329,6 @@ inline void use_compress()
 
 //------------------------------------------------------------------------------
 
-#endif // LAMBDAS_HPP
+#endif // CHAPTER6_HPP
 
 //------------------------------------------------------------------------------
