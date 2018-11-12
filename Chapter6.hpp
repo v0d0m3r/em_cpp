@@ -36,7 +36,7 @@ std::find_if(container.begin(), container.end(),
 
 //------------------------------------------------------------------------------
 // 6.1 Избегайте режимов захвата по умолчанию
-//{
+{
 
 
 using Filter_container = std::vector<std::function<bool(int)>>;
@@ -206,77 +206,232 @@ void add_divisor_filter()
 }
 
 
-//}
+}
 
 //------------------------------------------------------------------------------
+// 6.2 Используйте инициализирующий захват
+// для перемещения объектов в замыкания
+{
+
+
+class Widget {                      // Некоторый полезный тип
+public:
+    // ...
+    bool is_validated() const;
+    bool is_processed() const;
+    bool is_archived() const;
+private:
+    // ...
+};
+auto pw =
+    std::make_unique<Widget>();     // Создание Widget
+// ...                              // Настройка *pw
+auto func = [pw = std::move(pw)]    // Инициализация члена
+    { return pw->is_validated()     // в замыкании с помощью
+          && pw->is_archived(); };  // std::move(pw)
+
+
+auto func = [pw = std::make_unique<Widget>()]   // Инициализация
+    { return pw->is_validated()     // члена-данных в замыкании
+          && pw->is_archived(); };  // результатом вызова make_unique
+
+
+class Is_val_and_arch {
+public:
+    using Data_type = std::unique_ptr<Widget>;
+
+    explicit Is_val_and_arch(Data_type&& ptr)
+        : pw{std::move(ptr)} {}
+
+    bool operator() () const
+    { return  pw->is_validated() && pw->is_archived(); }
+private:
+    Data_type pw;
+};
+auto func = Is_val_and_arch{std::make_unique<Widget>()};
+
+
+// C++14
+std::vector<double> data;               // Объект, перемещаемый
+                                        // в замыкание
+// ...                                  // Наполнение данными
+auto func = [data = std::move(data)]    // Инициализирующий захват
+            { /* Использование данных */ };
+// C++11
+std::vector<double> data;
+// ...
+auto func =
+    std::bind(                                  // Эмуляция в С++11
+        [] (const std::vector<double>& data)    // инициализирующего
+        { /* Использование данных */ },         // захвата
+        std::move(data)
+    );
+
+
+auto func =
+    std::bind(                                  // Эмуляция в С++11
+        [] (std::vector<double>& data) mutable  // инициализирующего
+        { /* Использование данных */ },         // захвата для лямбда-
+        std::move(data)                         // выражения, объяв-
+    );                                          // ленного mutable
+
+
+auto func = [pw = std::make_unique<Widget>()]   // Инициализация
+    { return pw->is_validated()     // члена-данных в замыкании
+          && pw->is_archived(); };  // результатом вызова make_unique
+// C++11
+auto func = std::bind(
+    [] (const std::unique_ptr<Widget>& pw)
+    { return pw->is_validated()
+          && pw->is_archived(); },
+    std::make_unique<Widget>()
+    );
+
+
+}
+
+//------------------------------------------------------------------------------
+// 6.3 Используйте параметры decltype для auto&&
+// для передачи с помощью std::forward
+{
+
+
+auto f = [](auto x) { return  normalize(x); };
+class Some_compiler_generated_class_name {
+public:
+    template<class T>
+    auto operator() (T x) const
+    { return normalize(x); }
+                                // Прочая функциональность
+};                              // класса замыкания
+
+
+auto f = [](auto&& x)
+{ return  normalize(std::forward<???>(x)); };
+
+
+auto f = [](auto&& x)
+{ return  normalize(std::forward<decltype(x)>(x)); };
+
+
+auto f = [](auto&&... xs)
+{ return  normalize(std::forward<decltype(xs)>(x)...); };
+
+
+}
+
+//------------------------------------------------------------------------------
+// 6.4 Предпочитайте лямбда-выражения
+// применению std::bind
+//{
+
+
 // Тип для момента времени
 using Time = std::chrono::steady_clock::time_point;
-
-//------------------------------------------------------------------------------
-
 enum class Sound { Beep, Siren, Whistle };
-
-//------------------------------------------------------------------------------
-
 using Duration = std::chrono::steady_clock::duration;
-
-//------------------------------------------------------------------------------
+// ...
 // В момент t издать звук s продолжительностью d
-void set_alarm([[maybe_unused]] Time t,
-               [[maybe_unused]]	Sound s,
-               [[maybe_unused]] Duration d) {}
+void set_alarm(Time t, Sound s, Duration d);
 
-//------------------------------------------------------------------------------
-// Громкость звука
-enum class Volume { Normal, Loud, Loud_plus_plus };
 
-//------------------------------------------------------------------------------
-// В момент t издать звук s продолжительностью d громкостью
-void set_alarm([[maybe_unused]] Time t,
-               [[maybe_unused]]	Sound s,
-               [[maybe_unused]] Duration d,
-               [[maybe_unused]] Volume v) {}
-
-//------------------------------------------------------------------------------
 // set_sound_l ("l" - означет "лямбда-выражение") - функциональный
 // объект, позволяющий указать сигнал будильника, который должен
 // звучать через час в течение 30 с
-/* c++11
-auto set_sound_l = [] (Sound s) {
-    using namespace std::chrono;
-    set_alarm(steady_clock::now()+hours(1),
-              s,
-              seconds(30));
-};
-*/
-// c++14
-auto set_sound_l = [] (Sound s) {
-    using namespace std::chrono;
-    using namespace std::literals;
-    set_alarm(steady_clock::now() + 1h,
-              s,
-              30s);
-};
+auto set_sound_l =
+        [] (Sound s)
+        {
+            // Делает доступными компоненты std::chrono
+            using namespace  std::chrono;
 
-//------------------------------------------------------------------------------
+            set_alarm(steady_clock::now()+hours(1), // Будильник через
+                      s,                            // час, звучит
+                      seconds(30));                 // 30 секунд
+        };
+// c++14
+auto set_sound_l =
+        [] (Sound s)
+        {
+            using namespace std::chrono;
+            using namespace std::literals;          // Суффиксы с++14
+
+            set_alarm(steady_clock::now() + 1h,
+                      s,
+                      30s);
+        };
+
+
 // Для bind
 using namespace std::chrono;
 using namespace std::literals;
-using namespace std::placeholders;
+using namespace std::placeholders;      // Необходимо для "_1"
 
-//------------------------------------------------------------------------------
 
-using Set_alarm_3_param_type = void (*) (Time t, Sound s, Duration d);
-
-//------------------------------------------------------------------------------
-
+// Первая ошибочная версия
+auto set_sound_b =                      // "b" - означает bind
+    std::bind(set_alarm,
+              steady_clock::now() + 1h, // Ошибка
+              _1,
+              30s);
+// Вторая получше версия
 auto set_sound_b =                  // "b" - означает bind
+    std::bind(set_alarm,
+              std::bind(std::plus<>(),
+                        std::bind(steady_clock::now),
+                        1h),
+              _1,
+              30s);
+// С++11: явно указываем тип std::plus
+auto set_sound_b =                  // "b" - означает bind
+    std::bind(set_alarm,
+              std::bind(std::plus<steady_clock::time_point>(),
+                        std::bind(steady_clock::now),
+                        hours(1)),
+              _1,
+              seconds(30));
+
+
+// При перегрузке set_alarm
+// Громкость звука
+enum class Volume { Normal, Loud, Loud_plus_plus };
+// В момент t издать звук s продолжительностью d и громкостью v
+void set_alarm(Time t, Sound s, Duration d, Volume v);
+
+
+// Версия с лямбда-выражениями
+auto set_sound_l =
+        [] (Sound s)
+        {
+            using namespace std::chrono;
+            using namespace std::literals;
+
+            set_alarm(steady_clock::now() + 1h, // Ок, вызывает
+                      s,                        // set_alarm с тремя
+                      30s);                     // аргументами
+        };
+
+
+// Версия с std::bind не компилируется!
+auto set_sound_b =              // Ошибка!! Какая из
+    std::bind(set_alarm,        // функций set_alarm?
+              std::bind(std::plus<>(),
+                        std::bind(steady_clock::now),
+                        1h),
+              _1,
+              30s);
+// Чтобы std::bind компилировался:
+using Set_alarm_3_param_type = void (*) (Time t, Sound s, Duration d);
+auto set_sound_b =                  // Теперь все в порядке
     std::bind(static_cast<Set_alarm_3_param_type>(set_alarm),
               std::bind(std::plus<>(),
                         std::bind(steady_clock::now),
                         1h),
               _1,
               30s);
+
+
+
+//}
 
 //------------------------------------------------------------------------------
 
