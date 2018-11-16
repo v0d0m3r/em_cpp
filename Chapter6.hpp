@@ -323,7 +323,7 @@ auto f = [](auto&&... xs)
 //------------------------------------------------------------------------------
 // 6.4 Предпочитайте лямбда-выражения
 // применению std::bind
-//{
+{
 
 
 // Тип для момента времени
@@ -419,7 +419,7 @@ auto set_sound_b =              // Ошибка!! Какая из
                         1h),
               _1,
               30s);
-// Чтобы std::bind компилировался:
+// Чтобы std::bind компиллировался:
 using Set_alarm_3_param_type = void (*) (Time t, Sound s, Duration d);
 auto set_sound_b =                  // Теперь все в порядке
     std::bind(static_cast<Set_alarm_3_param_type>(set_alarm),
@@ -430,55 +430,67 @@ auto set_sound_b =                  // Теперь все в порядке
               30s);
 
 
+auto low_val(0);
+auto high_val(5);
+auto between_l =
+        [low_val, high_val]
+        (const auto& val)                               // C++14
+        { return low_val <= val && val <= high_val; };
 
-//}
 
-//------------------------------------------------------------------------------
+using namespace std::placeholders;
+auto between_b =
+        std::bind(std::logical_and<>(),                 // C++14
+                  std::bind(std::less_equal<>(), low_val, _1),
+                  std::bind(std::less_equal<>(), _1, high_val));
 
-inline void use_betwen()
-{
-    auto low_val    = 5;
-    auto high_val   = 10;
 
-    [[maybe_unused]] auto between_l =
-            [low_val, high_val] (const auto& val)
-            { return low_val <= val && val <= high_val; };
-    [[maybe_unused]] auto between_b =
-            std::bind(std::logical_and<>(),
-                      std::bind(std::less_equal<>(), low_val, _1),
-                      std::bind(std::less_equal<>(), _1, high_val));
-}
+// Для C++11 явно указываем типы в функциональных объектах
+auto between_b =
+        std::bind(std::logical_and<bool>(),                 // C++14
+                  std::bind(std::less_equal<int>(), low_val, _1),
+                  std::bind(std::less_equal<int>(), _1, high_val));
+// C++11 для лямбд, вместо auto используем конкретный тип
+auto between_l =
+        [low_val, high_val]
+        (int val)                               // C++11
+        { return low_val <= val && val <= high_val; };
 
-//------------------------------------------------------------------------------
 
-enum class Comp_level { low, normal, high }; // Уровень сжатия
+enum class Comp_level { low, normal, high}; // Уровень сжатия
+// ...
+Widget compress(const Widget& w,            // Создание сжатой
+                Comp_level lev);            // копии w
+// ...
+Widget w;
+auto compress_rate_b = std::bind(compress, w, _1);
 
-//------------------------------------------------------------------------------
 
-class Widget {
+auto compress_rate_l =                  // Захват w по значению;
+        [w] (Comp_level lev)            // lev передается по значению
+        { return compress(w, lev); };
+
+
+compress_rate_l(Comp_level::high);      // arg передается по значению
+// Для bind-объекта
+compress_rate_b(Comp_level::high);      // Как передается arg?
+
+
+class Poly_widget {
 public:
-    Widget() {}
+    template<class T>
+    void operator() (const T& param) const;
 };
+Poly_widget pw;
+auto bound_pw = std::bind(pw, _1);
+// ...
+bound_pw(1930);         // Передача int Poly_widget::operator
+bound_pw(nullptr);      // Передача nullptr Poly_widget::operator
+bound_pw("Rosebud");    // Передача строкового литерала
+// То же самое в С++11 нельзя, а в С++14 можно:
+auto bound_pw = [pw] (const auto& param)    // C++14
+                { pw(param); };
 
-//------------------------------------------------------------------------------
-
-inline Widget compress(const Widget& w,
-                      [[maybe_unused]] Comp_level lev)
-{
-    return w;
-}
-
-//------------------------------------------------------------------------------
-
-inline void use_compress()
-{
-    Widget w;
-    [[maybe_unused]] auto comress_rate_b
-            = std::bind(compress, w, _1);
-
-    [[maybe_unused]] auto compress_rate_l =
-            [w] (Comp_level lev)
-            { return compress(w, lev); };
 
 }
 
