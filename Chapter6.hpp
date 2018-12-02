@@ -374,7 +374,7 @@ auto set_sound_b =                      // "b" - означает bind
               _1,
               30s);
 // Вторая получше версия
-auto set_sound_b =                  // "b" - означает bind
+auto set_sound_b =                      // "b" - означает bind
     std::bind(set_alarm,
               std::bind(std::plus<>(),
                         std::bind(steady_clock::now),
@@ -382,7 +382,7 @@ auto set_sound_b =                  // "b" - означает bind
               _1,
               30s);
 // С++11: явно указываем тип std::plus
-auto set_sound_b =                  // "b" - означает bind
+auto set_sound_b =                      // "b" - означает bind
     std::bind(set_alarm,
               std::bind(std::plus<steady_clock::time_point>(),
                         std::bind(steady_clock::now),
@@ -419,7 +419,7 @@ auto set_sound_b =              // Ошибка!! Какая из
                         1h),
               _1,
               30s);
-// Чтобы std::bind компиллировался:
+// Чтобы std::bind компилировался:
 using Set_alarm_3_param_type = void (*) (Time t, Sound s, Duration d);
 auto set_sound_b =                  // Теперь все в порядке
     std::bind(static_cast<Set_alarm_3_param_type>(set_alarm),

@@ -17,4 +17,5 @@ HEADERS += \
     Chapter3.hpp \
     Chapter1.hpp \
     Chapter4.hpp \
-    Chapter5.hpp
+    Chapter5.hpp \
+    Chapter8.hpp
